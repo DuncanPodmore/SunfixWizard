@@ -1,0 +1,445 @@
+﻿@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="container">
+    <h2>Solar Panel Layout Wizard</h2>
+
+    <div class="row mt-4">
+        <!-- Run Orientation -->
+        <div class="col-md-3">
+            <label for="runOrientation">Run Orientation:</label>
+            <select id="runOrientation" class="form-control">
+                <option value="Columns">Columns / Vertical</option>
+                <option value="Rows">Rows / Horizontal</option>
+            </select>
+        </div>
+
+        <!-- Panel Orientation -->
+        <div class="col-md-3">
+            <label for="panelOrientation">Panel Orientation:</label>
+            <select id="panelOrientation" class="form-control">
+                <option value="Landscape">Landscape</option>
+                <option value="Portrait">Portrait</option>
+            </select>
+        </div>
+
+        <!-- Rail Orientation -->
+        <div class="col-md-3">
+            <label for="railOrientation">Rail Orientation:</label>
+            <select id="railOrientation" class="form-control">
+                <option value="Parallel">Parallel to Run</option>
+                <option value="Perpendicular">Perpendicular to Run</option>
+            </select>
+        </div>
+
+        <!-- Number of Rails -->
+        <div class="col-md-3">
+            <label for="numRails">Number of Rails:</label>
+            <input type="number" id="numRails" class="form-control" value="1" min="1" max="5" />
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <!-- Rail Continuity -->
+        <div class="col-md-3">
+            <label for="railContinuity">Rail Continuity:</label>
+            <select id="railContinuity" class="form-control">
+                <option value="Continuous">Continuous Rails</option>
+                <option value="Short">Short Rails</option>
+            </select>
+        </div>
+
+        <!-- Panel Long Dimension -->
+        <div class="col-md-3">
+            <label for="panelLongDimension">Length of Long Dimension (mm):</label>
+            <input type="number" id="panelLongDimension" class="form-control" value="2400" min="100" />
+        </div>
+
+        <!-- Panel Short Dimension -->
+        <div class="col-md-3">
+            <label for="panelShortDimension">Length of Short Dimension (mm):</label>
+            <input type="number" id="panelShortDimension" class="form-control" value="1100" min="100" />
+        </div>
+
+        <!-- Panel Thickness -->
+        <div class="col-md-3">
+            <label for="panelThickness">Panel Thickness (Not yet implemented):</label>
+            <input type="number" id="panelThickness" class="form-control" value="40" min="1" />
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <!-- Scale -->
+        <div class="col-md-3">
+            <label for="scale">Scale (0-100):</label>
+            <input type="number" id="scale" class="form-control" value="10" min="1" max="100" />
+        </div>
+
+        <!-- Number of Panels in Run -->
+        <div class="col-md-3">
+            <label for="numPanels">Number of Panels in Run:</label>
+            <input type="number" id="numPanels" class="form-control" value="3" min="1" max="1000" />
+        </div>
+
+        <!-- Number of Runs -->
+        <div class="col-md-3">
+            <label for="numberOfRuns">Number of Runs:</label>
+            <input type="number" id="numberOfRuns" class="form-control" value="1" min="1" max="1000" />
+        </div>
+
+        <!-- Add Runs Button -->
+        <div class="col-md-3 d-flex align-items-end">
+            <button id="addRunsButton" type="button" class="btn btn-primary w-100">
+                Add Runs
+            </button>
+        </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <canvas id="myCanvas" style="background-color: #ffffff; border: 1px solid #ccc;" width="1000" height="600"></canvas>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-md-3">
+            <button id="generateQuoteButton" type="button" class="btn btn-success w-100">
+                Generate Quote
+            </button>
+        </div>
+    </div>
+
+    <div id="quoteResult" class="mt-4">
+        <!-- This is where the quote result will be displayed -->
+    </div>
+
+</div>
+
+@section Scripts {
+    <script type="text/javascript">
+        // Variables
+        let panelArray = [];
+        let isLoaded = false;
+
+        // Input parameters
+        let runOrientation = "Columns";
+        let numPanels = 3;
+        let panelOrientation = "Landscape";
+        let railOrientation = "Parallel";
+        let numRails = 1;
+        let railContinuity = "Continuous";
+        let panelLongDimension = 2400;
+        let panelShortDimension = 1100;
+        let panelThickness = 40;
+        let numberOfRuns = 1;
+        let scale = 10; // Scale factor to fit the layout on canvas
+        let getScale = scale / 100;
+
+        // Canvas properties
+        let canvas = document.getElementById('myCanvas');
+        let ctx = canvas.getContext('2d');
+        const canvasWidth = 1000;
+        const canvasHeight = 600;
+
+        // Initialize panelArray
+        panelArray = [];
+
+        // Functions
+
+        function adjustScale(deltaY) {
+            scale = Math.max(1, Math.min(scale - Math.floor(deltaY / Math.abs(deltaY)), 100));
+            getScale = scale / 100;
+            drawLayout();
+        }
+
+        function getLongestArrayLength(arrays) {
+            return arrays.reduce((maxLength, currentArray) => Math.max(maxLength, currentArray.length), 0);
+        }
+
+        function drawLayout() {
+            getScale = scale / 100;
+            const result = calculateClamps(panelArray);
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Calculate panel dimensions based on orientation
+            const panelWidth = panelOrientation === "Landscape" ? panelLongDimension : panelShortDimension;
+            const panelHeight = panelOrientation === "Landscape" ? panelShortDimension : panelLongDimension;
+
+            // Draw panels
+            for (let rIndex = 0; rIndex < panelArray.length; rIndex++) {
+                const run = panelArray[rIndex];
+                for (let pIndex = 0; pIndex < run.length; pIndex++) {
+                    if (runOrientation === "Columns") {
+                        const x = rIndex * panelWidth;
+                        const y = pIndex * panelHeight;
+                        drawPanel(x, y, panelWidth, panelHeight);
+                        drawRail(x, y, panelWidth, panelHeight);
+                    } else {
+                        const x = pIndex * panelWidth;
+                        const y = rIndex * panelHeight;
+                        drawPanel(x, y, panelWidth, panelHeight);
+                        drawRail(x, y, panelWidth, panelHeight);
+                    }
+                }
+            }
+        }
+
+        function drawPanel(x, y, width, height) {
+            ctx.strokeRect(
+                x * getScale + 20,
+                y * getScale + 20,
+                width * getScale,
+                height * getScale
+            );
+        }
+
+        function repeat(times, callback) {
+            for (let i = 0; i < times; i++) {
+                callback(i);
+            }
+        }
+
+        function drawRail(x, y, panelWidth, panelHeight) {
+            ctx.strokeStyle = "red";
+            if (
+                (railOrientation === "Parallel" && runOrientation == "Columns") ||
+                (railOrientation === "Perpendicular" && runOrientation == "Rows")
+            ) {
+                const gap = panelWidth / (numRails + 1);
+
+                repeat(numRails, (i) => {
+                    if (railContinuity === "Continuous") {
+                        const intervalWidth = x * getScale + 20 + gap * getScale * (i + 1);
+                        ctx.beginPath();
+                        ctx.moveTo(intervalWidth, y * getScale + 20);
+                        ctx.lineTo(intervalWidth, y * getScale + panelHeight * getScale + 20);
+                        ctx.stroke();
+                    } else {
+                        const intervalWidth = x * getScale + 20 + gap * getScale * (i + 1);
+                        ctx.beginPath();
+                        ctx.moveTo(
+                            intervalWidth,
+                            y * getScale + 20 - (panelHeight * getScale) / 5
+                        );
+                        ctx.lineTo(
+                            intervalWidth,
+                            y * getScale + 20 + (panelHeight * getScale) / 5
+                        );
+
+                        ctx.moveTo(
+                            intervalWidth,
+                            y * getScale +
+                            20 -
+                            (panelHeight * getScale) / 5 +
+                            panelHeight * getScale
+                        );
+                        ctx.lineTo(
+                            intervalWidth,
+                            y * getScale +
+                            20 +
+                            (panelHeight * getScale) / 5 +
+                            panelHeight * getScale
+                        );
+                        ctx.stroke();
+                    }
+                });
+            } else {
+                const gap = panelHeight / (numRails + 1);
+
+                repeat(numRails, (i) => {
+                    if (railContinuity === "Continuous") {
+                        const intervalHeight = y * getScale + 20 + gap * getScale * (i + 1);
+                        ctx.beginPath();
+                        ctx.moveTo(x * getScale + 20, intervalHeight);
+                        ctx.lineTo(x * getScale + panelWidth * getScale + 20, intervalHeight);
+                        ctx.stroke();
+                    } else {
+                        const intervalHeight = y * getScale + 20 + gap * getScale * (i + 1);
+                        ctx.beginPath();
+                        ctx.moveTo(
+                            x * getScale + 20 - (panelWidth * getScale) / 5,
+                            intervalHeight
+                        );
+                        ctx.lineTo(
+                            x * getScale + 20 + (panelWidth * getScale) / 5,
+                            intervalHeight
+                        );
+
+                        ctx.moveTo(
+                            x * getScale +
+                            20 -
+                            (panelWidth * getScale) / 5 +
+                            panelWidth * getScale,
+                            intervalHeight
+                        );
+                        ctx.lineTo(
+                            x * getScale +
+                            20 +
+                            (panelWidth * getScale) / 5 +
+                            panelWidth * getScale,
+                            intervalHeight
+                        );
+                        ctx.stroke();
+                    }
+                });
+            }
+            ctx.strokeStyle = "black";
+        }
+
+        function calculateClamps(panelArray) {
+            let midClamps = 0;
+            let endClamps = 0;
+
+            for (const row of panelArray) {
+                let inSection = false;
+                let panelCountInSection = 0;
+
+                for (const panel of row) {
+                    if (panel) {
+                        // We're inside a continuous section of panels
+                        if (!inSection) {
+                            inSection = true; // Start of a new section
+                            endClamps += 2; // Add 2 end clamps for the section (start and end)
+                        }
+                        panelCountInSection++;
+                    } else if (inSection) {
+                        // We just finished a continuous section of panels
+                        midClamps += panelCountInSection - 1; // Mid clamp between every adjacent panel
+                        panelCountInSection = 0;
+                        inSection = false;
+                    }
+                }
+
+                // Handle the case where the section ends at the last panel
+                if (inSection) {
+                    midClamps += panelCountInSection - 1;
+                }
+            }
+
+            return { midClamps, endClamps };
+        }
+
+        // Event listeners
+
+        // Set up event listeners for inputs
+        document.getElementById('runOrientation').addEventListener('change', function () {
+            runOrientation = this.value;
+            drawLayout();
+        });
+
+        document.getElementById('panelOrientation').addEventListener('change', function () {
+            panelOrientation = this.value;
+            drawLayout();
+        });
+
+        document.getElementById('railOrientation').addEventListener('change', function () {
+            railOrientation = this.value;
+            drawLayout();
+        });
+
+        document.getElementById('numRails').addEventListener('change', function () {
+            numRails = parseInt(this.value);
+            drawLayout();
+        });
+
+        document.getElementById('railContinuity').addEventListener('change', function () {
+            railContinuity = this.value;
+            drawLayout();
+        });
+
+        document.getElementById('panelLongDimension').addEventListener('change', function () {
+            panelLongDimension = parseInt(this.value);
+            drawLayout();
+        });
+
+        document.getElementById('panelShortDimension').addEventListener('change', function () {
+            panelShortDimension = parseInt(this.value);
+            drawLayout();
+        });
+
+        document.getElementById('panelThickness').addEventListener('change', function () {
+            panelThickness = parseInt(this.value);
+            drawLayout();
+        });
+
+        document.getElementById('scale').addEventListener('change', function () {
+            scale = parseInt(this.value);
+            drawLayout();
+        });
+
+        document.getElementById('numPanels').addEventListener('change', function () {
+            numPanels = parseInt(this.value);
+            initializePanelArray();
+            drawLayout();
+        });
+
+        document.getElementById('numberOfRuns').addEventListener('change', function () {
+            numberOfRuns = parseInt(this.value);
+            initializePanelArray();
+            drawLayout();
+        });
+
+        document.getElementById('addRunsButton').addEventListener('click', function () {
+            let newRun = Array(numPanels).fill(1);
+            for (let i = 0; i < numberOfRuns; i++) {
+                panelArray.push(newRun);
+            }
+            drawLayout();
+        });
+
+        // Mouse wheel event for adjusting scale
+        canvas.addEventListener('wheel', function (event) {
+            event.preventDefault();
+            adjustScale(event.deltaY);
+        });
+
+        // Initialize panelArray and draw the initial layout
+        function initializePanelArray() {
+            panelArray = [];
+            for (let i = 0; i < numberOfRuns; i++) {
+                panelArray.push(Array(numPanels).fill(1));
+            }
+        }
+
+        function initialize() {
+            initializePanelArray();
+            drawLayout();
+        }
+
+        document.getElementById('generateQuoteButton').addEventListener('click', function () {
+            // Calculate clamps based on the panel array
+            const clampData = calculateClamps(panelArray);
+
+            // Send data to the server
+            fetch('/Quote/GenerateQuote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(clampData)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // Display the quote result
+                    document.getElementById('quoteResult').innerHTML = `
+            <h4>Quote Summary</h4>
+            <p>Mid Clamps: ${data.midClamps}</p>
+            <p>End Clamps: ${data.endClamps}</p>
+            <p>Total Cost: $${data.totalCost.toFixed(2)}</p>
+        `;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('quoteResult').innerHTML = "<p class='text-danger'>An error occurred while generating the quote.</p>";
+                });
+        });
+
+
+        // Call initialize on page load
+        window.onload = initialize;
+    </script>
+}
